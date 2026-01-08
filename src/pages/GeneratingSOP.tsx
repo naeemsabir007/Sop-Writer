@@ -31,7 +31,7 @@ const GeneratingSOP = () => {
   useEffect(() => {
     const fetchSOP = async () => {
       if (!id) return;
-      
+
       const { data, error } = await supabase
         .from("sops")
         .select("*")
@@ -71,22 +71,86 @@ const GeneratingSOP = () => {
 
   const generateSOP = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("generate-sop", {
-        body: { sopId: id },
-      });
+      // 🔥 Import Gemini SDK dynamically to avoid issues
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
 
-      if (error) {
-        throw new Error(error.message || "Failed to generate SOP");
+      // Check API key
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        console.error("🔥 VITE_GEMINI_API_KEY is missing");
+        throw new Error("API configuration error. Please contact support.");
+      }
+      console.log("🔑 API Key Status:", `Present (${apiKey.length} chars)`);
+
+      // Initialize Gemini
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      // Build the comprehensive SOP prompt
+      const prompt = `
+You are an expert Statement of Purpose (SOP) writer for international student visa applications. 
+Write a compelling, professional, and personalized Statement of Purpose based on the following details:
+
+**Applicant Information:**
+- Full Name: ${sopData?.full_name || "Applicant"}
+- Country of Application: ${sopData?.country || "Not specified"}
+- Target University: ${sopData?.university || "Not specified"}
+- Course/Program: ${sopData?.course || "Not specified"}
+- Degree Level: ${sopData?.degree_level || "Not specified"}
+- IELTS Score: ${sopData?.ielts_score || "Not provided"}
+- Current Qualification: ${sopData?.current_qualification || "Not specified"}
+- Work Experience: ${sopData?.work_experience || "Not provided"}
+- Motivation: ${sopData?.motivation || "Not provided"}
+- Career Goals: ${sopData?.career_goals || "Not provided"}
+- Why This University: ${sopData?.why_university || "Not provided"}
+- Why This Country: ${sopData?.why_country || "Not provided"}
+- Financial Sponsor: ${sopData?.financial_sponsor || "Not provided"}
+
+**Requirements:**
+1. Write in first person, professional yet personal tone
+2. Length: 800-1200 words
+3. Structure with clear paragraphs (no headers needed)
+4. Include: Introduction, Academic Background, Professional Experience (if any), Why this Course, Why this University, Why this Country, Career Goals, Conclusion
+5. Make it authentic and specific to the applicant's profile
+6. Calibrate language complexity to match IELTS ${sopData?.ielts_score || "7.0"} band
+7. Ensure it addresses visa officer concerns about genuine student intent
+8. End with strong commitment to return to home country after studies
+
+Write ONLY the SOP content, no additional commentary.
+      `.trim();
+
+      console.log("🚀 Calling Gemini API for SOP generation...");
+
+      // Call Gemini
+      const result = await model.generateContent(prompt);
+      const generatedText = result.response.text();
+
+      if (!generatedText || generatedText.trim().length < 100) {
+        throw new Error("Generated content is too short or empty");
       }
 
-      if (data?.error) {
-        throw new Error(data.error);
+      console.log("✅ SOP generated successfully:", generatedText.substring(0, 100) + "...");
+
+      // Save the generated content to Supabase
+      const { error: updateError } = await supabase
+        .from("sops")
+        .update({
+          generated_content: generatedText,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", id);
+
+      if (updateError) {
+        console.error("🔥 Failed to save SOP:", updateError);
+        throw new Error("Failed to save generated SOP");
       }
 
       // Success - redirect to result page
       navigate(`/sop-result/${id}`, { replace: true });
     } catch (err: any) {
-      console.error("Generation error:", err);
+      console.error("🔥 SOP GEN ERROR:", err);
+      console.error("🔥 Error Name:", err?.name);
+      console.error("🔥 Error Message:", err?.message);
       setError(err.message || "Failed to generate SOP");
       toast({
         title: "Generation Failed",
@@ -167,22 +231,20 @@ const GeneratingSOP = () => {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 ${
-                  isComplete
+                className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 ${isComplete
                     ? "bg-emerald-500/10 border border-emerald-500/30"
                     : isCurrent
-                    ? "bg-primary/10 border border-primary/30"
-                    : "bg-muted/30 border border-transparent"
-                }`}
+                      ? "bg-primary/10 border border-primary/30"
+                      : "bg-muted/30 border border-transparent"
+                  }`}
               >
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                    isComplete
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isComplete
                       ? "bg-emerald-500 text-white"
                       : isCurrent
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
                 >
                   <AnimatePresence mode="wait">
                     {isComplete ? (
@@ -208,13 +270,12 @@ const GeneratingSOP = () => {
                   </AnimatePresence>
                 </div>
                 <span
-                  className={`font-medium ${
-                    isComplete
+                  className={`font-medium ${isComplete
                       ? "text-emerald-500"
                       : isCurrent
-                      ? "text-foreground"
-                      : "text-muted-foreground"
-                  }`}
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                    }`}
                 >
                   {step.label}
                 </span>

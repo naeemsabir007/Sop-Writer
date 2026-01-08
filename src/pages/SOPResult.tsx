@@ -67,7 +67,7 @@ const SOPResult = () => {
   const [regenerating, setRegenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
-  
+
   // Payment flow states
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -81,7 +81,7 @@ const SOPResult = () => {
     const fetchSOPAndProfile = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        
+
         // Fetch SOP
         const { data, error } = await supabase
           .from("sops")
@@ -111,7 +111,7 @@ const SOPResult = () => {
             .select("*")
             .eq("sop_id", id)
             .maybeSingle();
-          
+
           setSensitiveDetails(sensitiveData);
         }
 
@@ -122,7 +122,7 @@ const SOPResult = () => {
             .select("is_premium")
             .eq("id", user.id)
             .single();
-          
+
           setIsPremium(profile?.is_premium || false);
         }
       } catch (error: any) {
@@ -192,7 +192,7 @@ const SOPResult = () => {
     if (fullName || email || phoneNumber || homeAddress) {
       doc.setFontSize(11);
       doc.setFont("times", "normal");
-      
+
       if (fullName) {
         doc.text(fullName, marginLeft, yPosition);
         yPosition += 5;
@@ -212,13 +212,13 @@ const SOPResult = () => {
         doc.text(email, marginLeft, yPosition);
         yPosition += 5;
       }
-      
+
       yPosition += 3;
       const today = new Date();
-      const dateStr = today.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+      const dateStr = today.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
       });
       doc.text(dateStr, marginLeft, yPosition);
       yPosition += 12;
@@ -228,7 +228,7 @@ const SOPResult = () => {
     doc.setFont("times", "bold");
     doc.text("Statement of Purpose", pageWidth / 2, yPosition, { align: "center" });
     yPosition += 8;
-    
+
     doc.setFontSize(11);
     doc.setFont("times", "italic");
     doc.text(`${sop?.university} - ${sop?.course}`, pageWidth / 2, yPosition, { align: "center" });
@@ -236,22 +236,22 @@ const SOPResult = () => {
 
     doc.setFontSize(12);
     doc.setFont("times", "normal");
-    
+
     const splitText = doc.splitTextToSize(editedContent, maxWidth);
-    
+
     splitText.forEach((line: string) => {
       if (yPosition + lineHeight > pageHeight - marginBottom) {
         doc.addPage();
         yPosition = marginTop;
       }
-      
+
       doc.text(line, marginLeft, yPosition);
       yPosition += lineHeight;
     });
 
     const fileName = `SOP-${sop?.university?.replace(/\s+/g, "-") || "document"}.pdf`;
     doc.save(fileName);
-    
+
     toast({
       title: "PDF Downloaded!",
       description: "Your SOP has been saved as a PDF.",
@@ -261,32 +261,85 @@ const SOPResult = () => {
   const handleRegenerate = async () => {
     setRegenerating(true);
     try {
-      // The edge function uses the LOCKED university/course from the database
-      // It cannot be manipulated from the frontend
-      const { data, error } = await supabase.functions.invoke("generate-sop", {
-        body: { sopId: id },
-      });
+      // 🔥 Import Gemini SDK dynamically
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      // Refetch the SOP
-      const { data: updatedSop } = await supabase
-        .from("sops")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (updatedSop) {
-        setSop(updatedSop);
-        setEditedContent(updatedSop.generated_content || "");
+      // Check API key
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        console.error("🔥 VITE_GEMINI_API_KEY is missing");
+        throw new Error("API configuration error");
       }
+
+      // Initialize Gemini
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      // Build the comprehensive SOP prompt using locked data
+      const prompt = `
+You are an expert Statement of Purpose (SOP) writer for international student visa applications. 
+Write a compelling, professional, and personalized Statement of Purpose based on the following details:
+
+**Applicant Information:**
+- Full Name: ${sop?.full_name || "Applicant"}
+- Country of Application: ${sop?.country || "Not specified"}
+- Target University: ${sop?.university || "Not specified"}
+- Course/Program: ${sop?.course || "Not specified"}
+- Degree Level: ${sop?.degree_level || "Not specified"}
+- IELTS Score: ${sop?.ielts_score || "Not provided"}
+- Current Qualification: ${sop?.current_qualification || "Not specified"}
+- Work Experience: ${sop?.work_experience || "Not provided"}
+- Motivation: ${sop?.motivation || "Not provided"}
+- Career Goals: ${sop?.career_goals || "Not provided"}
+- Why This University: ${sop?.why_university || "Not provided"}
+- Why This Country: ${sop?.why_country || "Not provided"}
+- Financial Sponsor: ${sop?.financial_sponsor || "Not provided"}
+
+**Requirements:**
+1. Write in first person, professional yet personal tone
+2. Length: 800-1200 words
+3. Structure with clear paragraphs (no headers needed)
+4. Include: Introduction, Academic Background, Professional Experience (if any), Why this Course, Why this University, Why this Country, Career Goals, Conclusion
+5. Make it authentic and specific to the applicant's profile
+6. Calibrate language complexity to match IELTS ${sop?.ielts_score || "7.0"} band
+7. Ensure it addresses visa officer concerns about genuine student intent
+8. End with strong commitment to return to home country after studies
+9. This is a REGENERATION - create a fresh, different version while keeping the core information
+
+Write ONLY the SOP content, no additional commentary.
+      `.trim();
+
+      console.log("🚀 Regenerating SOP with Gemini...");
+
+      // Call Gemini
+      const result = await model.generateContent(prompt);
+      const generatedText = result.response.text();
+
+      if (!generatedText || generatedText.trim().length < 100) {
+        throw new Error("Generated content is too short or empty");
+      }
+
+      // Save the regenerated content to Supabase
+      const { error: updateError } = await supabase
+        .from("sops")
+        .update({
+          generated_content: generatedText,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", id);
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      setSop({ ...sop, generated_content: generatedText });
+      setEditedContent(generatedText);
 
       toast({
         title: "Regenerated!",
-        description: "Your SOP has been regenerated with the locked target details.",
+        description: "Your SOP has been regenerated with fresh content.",
       });
     } catch (error: any) {
+      console.error("🔥 REGEN ERROR:", error);
       toast({
         title: "Regeneration failed",
         description: error.message || "Please try again.",
@@ -437,9 +490,9 @@ const SOPResult = () => {
                   Statement of Purpose — {sop?.university}
                 </span>
               </div>
-              
+
               {/* Content container with strict locking for unpaid users */}
-              <div 
+              <div
                 className={`relative ${!isPaid ? 'max-h-[300px] overflow-hidden' : ''}`}
               >
                 {/* Content area - locked for unpaid users */}
@@ -457,7 +510,7 @@ const SOPResult = () => {
                     </div>
                   )}
                 </div>
-                
+
                 {/* Blur overlay for unpaid users - blocks all interaction */}
                 {!isPaid && (
                   <div className="absolute inset-0 z-10 bg-gradient-to-b from-transparent via-card/80 to-card flex flex-col items-center justify-end pb-8">
@@ -497,34 +550,34 @@ const SOPResult = () => {
                 <div className="space-y-3">
                   <div className="p-3 rounded-lg bg-muted/50">
                     <Label className="text-xs text-muted-foreground">University</Label>
-                    <Input 
-                      value={sop?.university || ""} 
-                      disabled 
+                    <Input
+                      value={sop?.university || ""}
+                      disabled
                       className="mt-1 bg-muted/30 border-dashed cursor-not-allowed opacity-75"
                     />
                   </div>
                   <div className="p-3 rounded-lg bg-muted/50">
                     <Label className="text-xs text-muted-foreground">Course</Label>
-                    <Input 
-                      value={sop?.course || ""} 
-                      disabled 
+                    <Input
+                      value={sop?.course || ""}
+                      disabled
                       className="mt-1 bg-muted/30 border-dashed cursor-not-allowed opacity-75"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 rounded-lg bg-muted/50">
                       <Label className="text-xs text-muted-foreground">Degree</Label>
-                      <Input 
-                        value={sop?.degree_level || ""} 
-                        disabled 
+                      <Input
+                        value={sop?.degree_level || ""}
+                        disabled
                         className="mt-1 bg-muted/30 border-dashed cursor-not-allowed opacity-75"
                       />
                     </div>
                     <div className="p-3 rounded-lg bg-muted/50">
                       <Label className="text-xs text-muted-foreground">Country</Label>
-                      <Input 
-                        value={sop?.country || ""} 
-                        disabled 
+                      <Input
+                        value={sop?.country || ""}
+                        disabled
                         className="mt-1 bg-muted/30 border-dashed cursor-not-allowed opacity-75"
                       />
                     </div>
@@ -592,17 +645,17 @@ const SOPResult = () => {
                 {isPaid ? "Regenerate Content" : "Not Happy?"}
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                {isPaid 
+                {isPaid
                   ? "Generate a fresh version with your locked target details. Unlimited regenerations!"
                   : "Pay to unlock unlimited regenerations with your locked target."}
               </p>
               <Button
                 onClick={isPaid ? handleRegenerate : () => handleProceedToPayment("standard")}
                 disabled={regenerating}
-                className={`w-full ${isPaid 
+                className={`w-full ${isPaid
                   ? "bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground"
                   : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white"
-                }`}
+                  }`}
               >
                 {regenerating ? (
                   <>
@@ -643,7 +696,7 @@ const SOPResult = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Payment Status</span>
-                  <Badge 
+                  <Badge
                     variant={isPaid ? "default" : "secondary"}
                     className={isPaid ? "bg-emerald-500" : ""}
                   >
