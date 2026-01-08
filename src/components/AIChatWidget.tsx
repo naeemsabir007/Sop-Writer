@@ -14,7 +14,7 @@ interface Message {
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash-latest",
+  model: "gemini-1.5-flash",
   systemInstruction: "You are the helpful AI support assistant for SOPWriter.pk. You help users generate Standard Operating Procedures (SOPs). Be polite, concise, and professional. When users ask about features, explain how SOPWriter can help them create professional SOPs quickly. If they have technical issues, try to guide them through common solutions. For billing or account-specific issues, direct them to email support@sopwriter.pk."
 });
 
@@ -37,17 +37,14 @@ const AIChatWidget = () => {
     }
   }, [messages]);
 
-  // Initialize chat session when widget opens
+  // Initialize chat session when widget opens (only once)
   useEffect(() => {
     if (isOpen && !chatRef.current) {
       chatRef.current = model.startChat({
-        history: messages.slice(1).map((m) => ({
-          role: m.role === "user" ? "user" : "model",
-          parts: [{ text: m.content }],
-        })),
+        history: [], // Start fresh, don't pass message history to avoid re-init issues
       });
     }
-  }, [isOpen, messages]);
+  }, [isOpen]); // Only depend on isOpen, not messages
 
   const sendMessage = async (userMessage: string) => {
     setIsLoading(true);
@@ -64,10 +61,7 @@ const AIChatWidget = () => {
       // Initialize chat if not already done
       if (!chatRef.current) {
         chatRef.current = model.startChat({
-          history: messages.slice(1).map((m) => ({
-            role: m.role === "user" ? "user" : "model",
-            parts: [{ text: m.content }],
-          })),
+          history: [],
         });
       }
 
