@@ -4,14 +4,19 @@ import { MessageCircle, X, Send, Bot, User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { supabase } from "@/integrations/supabase/client";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
-const CHAT_URL = "https://jamyllztnuvyxvdxihfz.supabase.co/functions/v1/ai-support-chat";
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
+  systemInstruction: "You are the helpful AI support assistant for SOPWriter.pk. You help users generate Standard Operating Procedures (SOPs). Be polite, concise, and professional. When users ask about features, explain how SOPWriter can help them create professional SOPs quickly. If they have technical issues, try to guide them through common solutions. For billing or account-specific issues, direct them to email support@sopwriter.pk."
+});
 
 const AIChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -24,6 +29,7 @@ const AIChatWidget = () => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<ReturnType<typeof model.startChat> | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -31,92 +37,67 @@ const AIChatWidget = () => {
     }
   }, [messages]);
 
-  const streamChat = async (userMessage: string) => {
+  // Initialize chat session when widget opens
+  useEffect(() => {
+    if (isOpen && !chatRef.current) {
+      chatRef.current = model.startChat({
+        history: messages.slice(1).map((m) => ({
+          role: m.role === "user" ? "user" : "model",
+          parts: [{ text: m.content }],
+        })),
+      });
+    }
+  }, [isOpen, messages]);
+
+  const sendMessage = async (userMessage: string) => {
     setIsLoading(true);
     const newMessages: Message[] = [...messages, { role: "user", content: userMessage }];
     setMessages(newMessages);
 
-    let assistantContent = "";
-
     try {
-      // Get current session for auth token
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        setMessages([
-          ...newMessages,
-          {
-            role: "assistant",
-            content: "Please log in to use the AI support chat. You can create an account or sign in to get help!",
-          },
-        ]);
-        setIsLoading(false);
-        return;
+      // Check if API key is configured
+      if (!import.meta.env.VITE_GEMINI_API_KEY) {
+        console.error("VITE_GEMINI_API_KEY is not configured");
+        throw new Error("API key not configured");
       }
 
-      const resp = await fetch(CHAT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
-        }),
-      });
-
-      if (!resp.ok || !resp.body) {
-        throw new Error("Failed to get response");
+      // Initialize chat if not already done
+      if (!chatRef.current) {
+        chatRef.current = model.startChat({
+          history: messages.slice(1).map((m) => ({
+            role: m.role === "user" ? "user" : "model",
+            parts: [{ text: m.content }],
+          })),
+        });
       }
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let textBuffer = "";
-      let streamDone = false;
-
-      // Add assistant message placeholder
+      // Add placeholder for assistant message
       setMessages([...newMessages, { role: "assistant", content: "" }]);
 
-      while (!streamDone) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        textBuffer += decoder.decode(value, { stream: true });
+      // Send message and get response
+      const result = await chatRef.current.sendMessage(userMessage);
+      const response = await result.response;
+      const text = response.text();
 
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
-          if (!line.startsWith("data: ")) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") {
-            streamDone = true;
-            break;
-          }
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) {
-              assistantContent += content;
-              setMessages([...newMessages, { role: "assistant", content: assistantContent }]);
-            }
-          } catch {
-            textBuffer = line + "\n" + textBuffer;
-            break;
-          }
-        }
-      }
+      setMessages([...newMessages, { role: "assistant", content: text }]);
     } catch (error) {
       console.error("Chat error:", error);
+
+      // More descriptive error message for debugging
+      let errorMessage = "Sorry, I'm having trouble connecting right now. ";
+      if (error instanceof Error) {
+        console.error("Error details:", error.message);
+        if (error.message.includes("API key")) {
+          errorMessage += "The API configuration needs attention. ";
+        }
+      }
+      errorMessage += "Please try again or email support@sopwriter.pk";
+
       setMessages([
         ...newMessages,
         {
           role: "assistant",
-          content: "Sorry, I'm having trouble connecting right now. Please try again or email support@sopwriter.pk",
+          content: errorMessage,
         },
       ]);
     } finally {
@@ -130,7 +111,7 @@ const AIChatWidget = () => {
 
     const userMessage = input.trim();
     setInput("");
-    streamChat(userMessage);
+    sendMessage(userMessage);
   };
 
   return (
@@ -198,11 +179,10 @@ const AIChatWidget = () => {
                     className={`flex gap-2 ${message.role === "user" ? "flex-row-reverse" : ""}`}
                   >
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        message.role === "user"
-                          ? "bg-accent text-white"
-                          : "bg-secondary text-foreground"
-                      }`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.role === "user"
+                        ? "bg-accent text-white"
+                        : "bg-secondary text-foreground"
+                        }`}
                     >
                       {message.role === "user" ? (
                         <User className="w-4 h-4" />
@@ -211,11 +191,10 @@ const AIChatWidget = () => {
                       )}
                     </div>
                     <div
-                      className={`rounded-2xl px-4 py-2 max-w-[80%] ${
-                        message.role === "user"
-                          ? "bg-accent text-white rounded-br-sm"
-                          : "bg-secondary text-foreground rounded-bl-sm"
-                      }`}
+                      className={`rounded-2xl px-4 py-2 max-w-[80%] ${message.role === "user"
+                        ? "bg-accent text-white rounded-br-sm"
+                        : "bg-secondary text-foreground rounded-bl-sm"
+                        }`}
                     >
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     </div>
