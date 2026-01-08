@@ -7,6 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Gemini API endpoint
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+
 const SYSTEM_PROMPT = `You are a helpful support assistant for SOPWriter, a service that generates professional Statement of Purpose (SOP) documents for student visa applications. 
 
 About SOPWriter:
@@ -37,7 +40,7 @@ serve(async (req) => {
     // Require authentication to prevent external abuse
     const authHeader = req.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '');
-    
+
     if (!token) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
@@ -49,9 +52,9 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    
+
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+
     if (authError || !user) {
       console.error("Auth error:", authError?.message);
       return new Response(
@@ -71,52 +74,99 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
-      throw new Error("AI service is not configured");
+    if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY is not configured");
+      throw new Error("AI service is not configured. Please add GEMINI_API_KEY to Supabase secrets.");
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Convert OpenAI-style messages to Gemini format
+    // Gemini uses "user" and "model" roles, and doesn't have a system role in the same way
+    // We'll prepend the system prompt to the first user message
+    const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+
+    let isFirstUserMessage = true;
+    for (const msg of messages) {
+      const role = msg.role === "assistant" ? "model" : "user";
+      let text = msg.content;
+
+      // Prepend system prompt to first user message
+      if (role === "user" && isFirstUserMessage) {
+        text = `[System Instructions: ${SYSTEM_PROMPT}]\n\nUser message: ${text}`;
+        isFirstUserMessage = false;
+      }
+
+      geminiContents.push({
+        role,
+        parts: [{ text }]
+      });
+    }
+
+    // Call Gemini API
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          ...messages,
+        contents: geminiContents,
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024,
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         ],
-        stream: true,
       }),
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Gemini API error:", response.status, errorText);
+
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Service temporarily unavailable." }), {
-          status: 402,
+      if (response.status === 403) {
+        return new Response(JSON.stringify({ error: "API key invalid or quota exceeded." }), {
+          status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
       return new Response(JSON.stringify({ error: "Failed to get AI response" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    const data = await response.json();
+    const assistantContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
+
+    // Return response in SSE format to be compatible with existing frontend
+    // The frontend expects streaming, so we'll simulate it with a single chunk
+    const sseData = `data: ${JSON.stringify({
+      choices: [{
+        delta: { content: assistantContent },
+        finish_reason: "stop"
+      }]
+    })}\n\ndata: [DONE]\n\n`;
+
+    return new Response(sseData, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive"
+      },
     });
   } catch (error) {
     console.error("AI support chat error:", error);

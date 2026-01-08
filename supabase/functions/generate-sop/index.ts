@@ -6,6 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Gemini API endpoint
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -32,9 +35,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured. Please add it to Supabase Edge Function secrets.");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -44,7 +47,7 @@ serve(async (req) => {
     // Get user from JWT (automatically verified by Supabase with verify_jwt = true)
     const authHeader = req.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '');
-    
+
     if (!token) {
       console.error("No authorization token provided");
       return new Response(
@@ -101,20 +104,20 @@ serve(async (req) => {
     const ieltsMatch = sop.ielts_score?.match(/(\d+\.?\d*)/);
     const ieltsScore = ieltsMatch ? parseFloat(ieltsMatch[1]) : 0;
     const englishLevel = ieltsScore >= 7 ? "C1 Academic English with sophisticated vocabulary" : "B2 English with clear, simple sentences";
-    
+
     // Build the context
     const hasGapYears = sop.gap_years && sop.gap_years > 0;
     const hasRefusal = sop.future_goals?.toLowerCase().includes("visa refusal") || false;
     const hasPersonalStory = sop.motivation && sop.motivation.length > 50;
-    
+
     // Get current date formatted
-    const currentDate = new Date().toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
 
-const systemPrompt = `### ROLE & IDENTITY
+    const systemPrompt = `### ROLE & IDENTITY
 
 You are the "SOP Architect Pro," an elite academic consultant for international students (specifically focusing on applicants from Pakistan/South Asia). Your standard for quality is "Ivy League Admission." You do not just write; you strategize, draft, and then STRICTLY AUDIT your own work.
 
@@ -238,44 +241,67 @@ ${hasRefusal ? `- Previous Refusal: ${sop.future_goals?.split("|")[1]?.replace("
 
 Generate the SOP now. Include both the [INTERNAL QUALITY REPORT] and [FINAL STATEMENT OF PURPOSE] sections.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call Gemini API directly
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 4096,
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         ],
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI Gateway error:", response.status, errorText);
-      
+      console.error("Gemini API error:", response.status, errorText);
+
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
+          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment. (Free tier: 15 requests/minute)" }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (response.status === 400) {
+        console.error("Bad request to Gemini:", errorText);
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Invalid request to AI service. Please try again." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (response.status === 403) {
+        return new Response(
+          JSON.stringify({ error: "API key invalid or quota exceeded. Please check your Gemini API key." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       throw new Error("Failed to generate SOP");
     }
 
     const data = await response.json();
-    const generatedContent = data.choices?.[0]?.message?.content;
+
+    // Extract content from Gemini response format
+    const generatedContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!generatedContent) {
+      console.error("No content in Gemini response:", JSON.stringify(data));
       throw new Error("No content generated");
     }
 

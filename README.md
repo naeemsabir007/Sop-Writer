@@ -94,7 +94,7 @@
 |------------|---------|
 | **Supabase** | PostgreSQL database, Auth, Storage, Edge Functions |
 | **Deno Edge Functions** | Serverless AI generation with low latency |
-| **Gemini 2.5 Flash** | LLM for intelligent document generation |
+| **Gemini 1.5 Flash** | LLM for intelligent document generation (Google AI) |
 
 ### DevOps
 | Technology | Purpose |
@@ -154,7 +154,7 @@
 
 - Node.js 18+ or Bun
 - Supabase account (free tier works)
-- AI API key for Gemini/Lovable Gateway
+- Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
 ### Installation
 
@@ -179,11 +179,11 @@ VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-For Supabase Edge Functions:
+For Supabase Edge Functions (add these as secrets in Supabase Dashboard):
 ```env
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-LOVABLE_API_KEY=your_ai_gateway_key
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ### Development
