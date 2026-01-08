@@ -14,7 +14,7 @@ interface Message {
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: "gemini-1.5-flash-latest",
   systemInstruction: "You are the helpful AI support assistant for SOPWriter.pk. You help users generate Standard Operating Procedures (SOPs). Be polite, concise, and professional. When users ask about features, explain how SOPWriter can help them create professional SOPs quickly. If they have technical issues, try to guide them through common solutions. For billing or account-specific issues, direct them to email support@sopwriter.pk."
 });
 
