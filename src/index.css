@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* SOPWriter Premium Academic Theme */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Deep Navy - Primary brand */
+    --primary: 220 55% 8%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Slate White - Secondary surfaces */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 215 20% 65%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Emerald Green - Success/CTA */
+    --accent: 160 84% 39%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Gold - Premium tier */
+    --gold: 38 92% 50%;
+    --gold-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 160 84% 39%;
+
+    --radius: 0.5rem;
+
+    /* Custom gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(220 55% 8%) 0%, hsl(220 45% 12%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(160 84% 39%) 0%, hsl(160 84% 45%) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(38 92% 50%) 0%, hsl(45 93% 55%) 100%);
+
+    /* Shadows */
+    --shadow-glow-green: 0 0 40px hsl(160 84% 39% / 0.4);
+    --shadow-glow-gold: 0 0 40px hsl(38 92% 50% / 0.3);
+    --shadow-card: 0 4px 20px hsl(222 47% 11% / 0.08);
+    --shadow-card-hover: 0 8px 30px hsl(222 47% 11% / 0.12);
+
+    /* Glass effect - Light mode */
+    --glass-bg: hsl(0 0% 100% / 0.85);
+    --glass-border: hsl(214 32% 91% / 0.6);
+    --glass-shadow: 0 8px 32px hsl(222 47% 11% / 0.1);
+  }
+
+  .dark {
+    --background: 220 55% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 220 45% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 45% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 220 55% 8%;
+
+    --secondary: 220 40% 15%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 220 30% 20%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 160 84% 39%;
+    --accent-foreground: 0 0% 100%;
+
+    --border: 220 30% 25%;
+    --input: 220 30% 20%;
+    --ring: 160 84% 39%;
+
+    /* Glass effect - Dark mode */
+    --glass-bg: hsl(220 45% 10% / 0.9);
+    --glass-border: hsl(220 30% 30% / 0.5);
+    --glass-shadow: 0 8px 32px hsl(0 0% 0% / 0.3);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply transition-colors duration-300;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-bold tracking-tight;
+  }
+}
+
+@layer components {
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+
+  .dark .glass {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 hsl(220 30% 35% / 0.1);
+  }
+
+  .glow-green {
+    box-shadow: var(--shadow-glow-green);
+  }
+
+  .glow-gold {
+    box-shadow: var(--shadow-glow-gold);
+  }
+
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  .gradient-gold {
+    background: var(--gradient-gold);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Infinite scroll animation for ticker */
+  @keyframes scroll {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-scroll {
+    animation: scroll 30s linear infinite;
+  }
+
+  .animate-scroll:hover {
+    animation-play-state: paused;
+  }
+
+  /* Auth page animations */
+  @keyframes slow-zoom {
+    0% {
+      transform: scale(1);
+    }
+    100% {
+      transform: scale(1.05);
+    }
+  }
+
+  @keyframes fade-in-up {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-slow-zoom {
+    animation: slow-zoom 10s ease-out forwards;
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.8s ease-out forwards;
+    animation-delay: 0.3s;
+    opacity: 0;
+  }
+}

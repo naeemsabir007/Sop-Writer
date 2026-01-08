@@ -1,0 +1,41 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Glow Filter -->
+  <defs>
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="penGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Pen Nib / Droplet Shape -->
+  <path
+    d="M24 4C24 4 10 18 10 30C10 38.284 16.716 45 25 45C33.284 45 40 38.284 40 30C40 18 24 4 24 4Z"
+    stroke="url(#penGradient)"
+    stroke-width="2.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+    filter="url(#neonGlow)"
+  />
+
+  <!-- Inner Flowing Digital Path -->
+  <path
+    d="M24 14C24 14 18 22 18 28C18 32 21 35 24 35C27 35 30 32 30 28C30 22 24 14 24 14Z"
+    stroke="url(#penGradient)"
+    stroke-width="2"
+    stroke-linecap="round"
+    fill="none"
+    filter="url(#neonGlow)"
+    opacity="0.9"
+  />
+
+  <!-- Small accent dot -->
+  <circle cx="24" cy="38" r="2" fill="#10B981" filter="url(#neonGlow)"/>
+</svg>

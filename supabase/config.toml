@@ -1,0 +1,4 @@
+project_id = "jamyllztnuvyxvdxihfz"
+
+[functions.generate-sop]
+verify_jwt = true
