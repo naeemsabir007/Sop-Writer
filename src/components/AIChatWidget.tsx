@@ -80,15 +80,27 @@ const AIChatWidget = () => {
       const text = response.text();
 
       setMessages([...newMessages, { role: "assistant", content: text }]);
-    } catch (error) {
-      console.error("Chat error:", error);
+    } catch (error: any) {
+      // 🔥 LOUD DEBUGGING - Log the EXACT error from Google/Network
+      console.error("🔥 CRITICAL CHAT ERROR:", error);
+      console.error("🔥 Error Name:", error?.name);
+      console.error("🔥 Error Message:", error?.message);
+      console.error("🔥 Full Error Object:", JSON.stringify(error, null, 2));
 
-      // More descriptive error message for debugging
+      // 🔑 Check if the key exists (Don't log the full key for safety, just the length)
+      const key = import.meta.env.VITE_GEMINI_API_KEY;
+      console.log("🔑 API Key Status:", key ? `Present (${key.length} chars)` : "❌ MISSING (Undefined)");
+
+      // Build user-facing error message
       let errorMessage = "Sorry, I'm having trouble connecting right now. ";
-      if (error instanceof Error) {
-        console.error("Error details:", error.message);
-        if (error.message.includes("API key")) {
-          errorMessage += "The API configuration needs attention. ";
+      if (error?.message) {
+        // Add a hint about what went wrong (without exposing sensitive details)
+        if (error.message.includes("API key") || error.message.includes("API_KEY")) {
+          errorMessage += "API configuration issue detected. ";
+        } else if (error.message.includes("quota") || error.message.includes("rate")) {
+          errorMessage += "Rate limit reached. Please wait a moment. ";
+        } else if (error.message.includes("network") || error.message.includes("fetch")) {
+          errorMessage += "Network issue detected. ";
         }
       }
       errorMessage += "Please try again or email support@sopwriter.pk";
