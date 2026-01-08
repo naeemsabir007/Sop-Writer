@@ -84,7 +84,7 @@ const GeneratingSOP = () => {
 
       // Initialize Gemini
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       // Build the comprehensive SOP prompt
       const prompt = `
@@ -232,18 +232,18 @@ Write ONLY the SOP content, no additional commentary.
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
                 className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 ${isComplete
-                    ? "bg-emerald-500/10 border border-emerald-500/30"
-                    : isCurrent
-                      ? "bg-primary/10 border border-primary/30"
-                      : "bg-muted/30 border border-transparent"
+                  ? "bg-emerald-500/10 border border-emerald-500/30"
+                  : isCurrent
+                    ? "bg-primary/10 border border-primary/30"
+                    : "bg-muted/30 border border-transparent"
                   }`}
               >
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isComplete
-                      ? "bg-emerald-500 text-white"
-                      : isCurrent
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
+                    ? "bg-emerald-500 text-white"
+                    : isCurrent
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
                     }`}
                 >
                   <AnimatePresence mode="wait">
@@ -271,10 +271,10 @@ Write ONLY the SOP content, no additional commentary.
                 </div>
                 <span
                   className={`font-medium ${isComplete
-                      ? "text-emerald-500"
-                      : isCurrent
-                        ? "text-foreground"
-                        : "text-muted-foreground"
+                    ? "text-emerald-500"
+                    : isCurrent
+                      ? "text-foreground"
+                      : "text-muted-foreground"
                     }`}
                 >
                   {step.label}
